@@ -3,6 +3,20 @@
 //
 //file with lang. translations
 require_once "lang.php";
+$sessionStorage=__DIR__.DIRECTORY_SEPARATOR.'runtime'.DIRECTORY_SEPARATOR.'sessions';
+if (!is_dir($sessionStorage) && !mkdir($sessionStorage, 0700, true) && !is_dir($sessionStorage)) {
+  throw new RuntimeException('Unable to create the protected session directory.');
+}
+session_save_path($sessionStorage);
+$usingHttps=(!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+session_set_cookie_params([
+  'lifetime' => 0,
+  'path' => '/',
+  'secure' => $usingHttps,
+  'httponly' => true,
+  'samesite' => 'Lax'
+]);
+session_start();
 //main configuration file
 $configFile="config.php";
 //psk variable. by default is - means no aditional password for encryption is added
@@ -38,7 +52,7 @@ if (strpos($lng,"uk-UA")) {
 }
 //common database config
 $mysqli_dsn="mysql:host={$mysqli_host};dbname={$mysqli_db}";
-$mysqli_options=[ PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES utf8', ];
+$mysqli_options=[ PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES utf8', PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, ];
 $mysqli_dbh=new PDO($mysqli_dsn, $mysqli_dbuser, $mysqli_dbpass, $mysqli_options);
 $ciphering="AES256";
 $iv_length=openssl_cipher_iv_length($ciphering);
@@ -47,7 +61,80 @@ $options=0;
 //Generate the CSRF token and cookie before any HTML is sent.
 $salt=rand(0,9).rand(0,9).rand(0,9).rand(0,9).rand(0,9).rand(0,9);
 $token=$salt.":".MD5($salt.":".$key);
-setcookie("CSRF", $token, time() + 600, "/");
+setcookie("CSRF", $token, [
+  'expires' => time() + 600,
+  'path' => '/',
+  'secure' => $usingHttps,
+  'httponly' => true,
+  'samesite' => 'Lax'
+]);
+
+function csrfIsValid() {
+  return isset($_POST['csrfToken'], $_COOKIE['CSRF'])
+    && hash_equals($_COOKIE['CSRF'], $_POST['csrfToken']);
+}
+
+$authError="";
+if (isset($_POST['register'])) {
+  if (!csrfIsValid()) {
+    $authError=$lang_err2;
+  } else {
+    $username=trim($_POST['username'] ?? '');
+    $password=$_POST['password'] ?? '';
+    if (!preg_match('/^[A-Za-z0-9_.-]{3,32}$/', $username)) {
+      $authError=$lang_auth_username_error;
+    } elseif (strlen($password) < 10) {
+      $authError=$lang_auth_password_error;
+    } else {
+      try {
+        $register=$mysqli_dbh->prepare("INSERT INTO `users` (`username`,`password_hash`) VALUES (?,?)");
+        $register->execute([$username, password_hash($password, PASSWORD_DEFAULT)]);
+        session_regenerate_id(true);
+        $_SESSION['user_id']=(int)$mysqli_dbh->lastInsertId();
+        $_SESSION['username']=$username;
+        header("Location: ".$_SERVER['PHP_SELF']);
+        die();
+      } catch (PDOException $exception) {
+        if ($exception->getCode() === '23000') {
+          $authError=$lang_auth_exists;
+        } else {
+          throw $exception;
+        }
+      }
+    }
+  }
+}
+
+if (isset($_POST['login'])) {
+  if (!csrfIsValid()) {
+    $authError=$lang_err2;
+  } else {
+    $username=trim($_POST['username'] ?? '');
+    $login=$mysqli_dbh->prepare("SELECT `id`,`username`,`password_hash` FROM `users` WHERE `username`=? LIMIT 1");
+    $login->execute([$username]);
+    $account=$login->fetch(PDO::FETCH_ASSOC);
+    if ($account === false || !password_verify($_POST['password'] ?? '', $account['password_hash'])) {
+      $authError=$lang_auth_invalid;
+    } else {
+      session_regenerate_id(true);
+      $_SESSION['user_id']=(int)$account['id'];
+      $_SESSION['username']=$account['username'];
+      header("Location: ".$_SERVER['PHP_SELF']);
+      die();
+    }
+  }
+}
+
+if (isset($_POST['logout']) && csrfIsValid()) {
+  $_SESSION=[];
+  if (ini_get('session.use_cookies')) {
+    $sessionCookie=session_get_cookie_params();
+    setcookie(session_name(), '', time()-42000, $sessionCookie['path'], $sessionCookie['domain'], $sessionCookie['secure'], $sessionCookie['httponly']);
+  }
+  session_destroy();
+  header("Location: ".$_SERVER['PHP_SELF']);
+  die();
+}
 if (isset($_GET['link']) || isset($_GET['s'])) {
   header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
   header("Pragma: no-cache");
@@ -253,6 +340,11 @@ if (!isset($_POST['dwlAttachment'])) {?>
 <?php }
 //Create link and secure data function
 if (isset($_POST['create'])) {
+  if (empty($_SESSION['user_id'])) {
+    http_response_code(403);
+    echo("<p>".$lang_auth_required."</p>");
+    die();
+  }
   //check all variables are set and not empty
   if ((!isset($_POST['textMain'])) || (!isset($_POST['timeValid'])) || (!isset($_POST['viewLimit'])) || ((empty($_POST['textMain'])) && ($_FILES['userfile']['size'] == 0)) || (empty($_POST['timeValid']))) {
     echo("<script>alert('".$lang_err1."');</script>");
@@ -305,15 +397,15 @@ if (isset($_POST['create'])) {
     }
   }
   if ($_FILES['userfile']['size'] > 0) {
-    $messageInsert=$mysqli_dbh->prepare("INSERT INTO `messages` (`created`,`lifetime`,`token`,`link`,`short_link`,`message`,`file`,`file_name`,`psk`,`views_remaining`) VALUES (?,?,?,?,?,?,?,?,?,?)");
-    $messageInsert->execute([time(), trim($_POST['timeValid'])*3600, trim($_POST['csrfToken']), $link, $shortLink, $encrypted_text, $dataBase64, basename($_FILES['userfile']['name']), $psk, $viewLimit]);
+    $messageInsert=$mysqli_dbh->prepare("INSERT INTO `messages` (`user_id`,`created`,`lifetime`,`token`,`link`,`short_link`,`message`,`file`,`file_name`,`psk`,`views_remaining`) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
+    $messageInsert->execute([$_SESSION['user_id'], time(), trim($_POST['timeValid'])*3600, trim($_POST['csrfToken']), $link, $shortLink, $encrypted_text, $dataBase64, basename($_FILES['userfile']['name']), $psk, $viewLimit]);
   } else {
-    $messageInsert=$mysqli_dbh->prepare("INSERT INTO `messages` (`created`,`lifetime`,`token`,`link`,`short_link`,`message`,`psk`,`views_remaining`) VALUES (?,?,?,?,?,?,?,?)");
-    $messageInsert->execute([time(), trim($_POST['timeValid'])*3600, trim($_POST['csrfToken']), $link, $shortLink, $encrypted_text, $psk, $viewLimit]);
+    $messageInsert=$mysqli_dbh->prepare("INSERT INTO `messages` (`user_id`,`created`,`lifetime`,`token`,`link`,`short_link`,`message`,`psk`,`views_remaining`) VALUES (?,?,?,?,?,?,?,?,?)");
+    $messageInsert->execute([$_SESSION['user_id'], time(), trim($_POST['timeValid'])*3600, trim($_POST['csrfToken']), $link, $shortLink, $encrypted_text, $psk, $viewLimit]);
   }
   $messageId=(int)$mysqli_dbh->lastInsertId();
-  $historyInsert=$mysqli_dbh->prepare("INSERT INTO `message_history` (`message_id`) VALUES (?)");
-  $historyInsert->execute([$messageId]);
+  $historyInsert=$mysqli_dbh->prepare("INSERT INTO `message_history` (`message_id`,`user_id`) VALUES (?,?)");
+  $historyInsert->execute([$messageId, $_SESSION['user_id']]);
   $shareQuery=$shortLink === null ? "link=".$link : "s=".$shortLink;
   $shareUrl="https://".$_SERVER['SERVER_NAME'].$_SERVER['PHP_SELF']."?".$shareQuery;
   ?>
@@ -498,6 +590,17 @@ if (isset($_GET['link']) || isset($_GET['s'])) {
       <h1 class="fw-bold lh-1 mb-3"><?php echo($lang_main);?></h1>
       <p class="col-lg-101 fs-51" style="text-align: center;"><?php echo($lang_main2);?></p>
     </div>
+    <?php if (!empty($authError)) { ?>
+      <div class="alert alert-danger" role="alert"><?php echo(htmlspecialchars($authError, ENT_QUOTES, 'UTF-8'));?></div>
+    <?php } ?>
+    <?php if (!empty($_SESSION['user_id'])) { ?>
+    <div class="d-flex justify-content-end align-items-center gap-3 mb-3">
+      <span><?php echo($lang_signed_in);?> <strong><?php echo(htmlspecialchars($_SESSION['username'], ENT_QUOTES, 'UTF-8'));?></strong></span>
+      <form method="POST" class="m-0">
+        <input type="hidden" name="csrfToken" value="<?php echo($token);?>">
+        <button class="btn btn-outline-secondary btn-sm" type="submit" name="logout"><?php echo($lang_logout);?></button>
+      </form>
+    </div>
     <div id="bottom-block" style="postion: absolute; padding-right: 1rem;">
       <form class="p-4 p-md-5 border rounded-3 bg-light" enctype="multipart/form-data" method="POST">
         <input type="hidden" name="MAX_FILE_SIZE" value="16535000" />
@@ -527,7 +630,8 @@ if (isset($_GET['link']) || isset($_GET['s'])) {
     <section class="mt-4 mb-4 p-4 border rounded-3 bg-light" aria-labelledby="message-history-heading">
       <h2 id="message-history-heading" class="h4 mb-3"><?php echo($lang_history);?></h2>
       <?php
-      $historyQuery=$mysqli_dbh->query("SELECT `sent_at`,`viewed` FROM `message_history` ORDER BY `sent_at` DESC, `id` DESC", PDO::FETCH_ASSOC);
+      $historyQuery=$mysqli_dbh->prepare("SELECT `sent_at`,`viewed` FROM `message_history` WHERE `user_id`=? ORDER BY `sent_at` DESC, `id` DESC");
+      $historyQuery->execute([$_SESSION['user_id']]);
       $historyRows=$historyQuery->fetchAll(PDO::FETCH_ASSOC);
       if (empty($historyRows)) { ?>
         <p class="mb-0"><?php echo($lang_history_empty);?></p>
@@ -558,6 +662,40 @@ if (isset($_GET['link']) || isset($_GET['s'])) {
         </div>
       <?php } ?>
     </section>
+    <?php } else { ?>
+    <div class="row g-4 justify-content-center">
+      <div class="col-md-6 col-lg-5">
+        <form class="p-4 border rounded-3 bg-light h-100" method="POST">
+          <h2 class="h4 mb-3"><?php echo($lang_login);?></h2>
+          <div class="mb-3">
+            <label class="form-label" for="login-username"><?php echo($lang_username);?></label>
+            <input class="form-control" id="login-username" name="username" type="text" autocomplete="username" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="login-password"><?php echo($lang_password);?></label>
+            <input class="form-control" id="login-password" name="password" type="password" autocomplete="current-password" required>
+          </div>
+          <input type="hidden" name="csrfToken" value="<?php echo($token);?>">
+          <button class="btn btn-primary" type="submit" name="login"><?php echo($lang_login);?></button>
+        </form>
+      </div>
+      <div class="col-md-6 col-lg-5">
+        <form class="p-4 border rounded-3 bg-light h-100" method="POST">
+          <h2 class="h4 mb-3"><?php echo($lang_register);?></h2>
+          <div class="mb-3">
+            <label class="form-label" for="register-username"><?php echo($lang_username);?></label>
+            <input class="form-control" id="register-username" name="username" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9_.-]+" autocomplete="username" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="register-password"><?php echo($lang_password);?></label>
+            <input class="form-control" id="register-password" name="password" type="password" minlength="10" autocomplete="new-password" required>
+          </div>
+          <input type="hidden" name="csrfToken" value="<?php echo($token);?>">
+          <button class="btn btn-primary" type="submit" name="register"><?php echo($lang_register);?></button>
+        </form>
+      </div>
+    </div>
+    <?php } ?>
   </div>
 </body>
 </html>

@@ -1,6 +1,16 @@
+DROP TABLE IF EXISTS `users`;
+CREATE TABLE `users` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `username` varchar(32) NOT NULL,
+  `password_hash` varchar(255) NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `users_username` (`username`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 DROP TABLE IF EXISTS `messages`;
 CREATE TABLE `messages` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int unsigned DEFAULT NULL COMMENT 'Account that created the message',
   `created_human` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Human readable time when a record was opened',
   `created` varchar(12) NOT NULL COMMENT 'Epoch time when a record was created',
   `lifetime` varchar(12) NOT NULL COMMENT 'How long does it valid',
@@ -13,18 +23,21 @@ CREATE TABLE `messages` (
   `psk` varchar(1) NOT NULL DEFAULT '0' COMMENT 'Is encrypted with additional password?',
   `views_remaining` int unsigned NOT NULL DEFAULT 1 COMMENT 'Successful text views remaining',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `messages_short_link` (`short_link`)
+  UNIQUE KEY `messages_short_link` (`short_link`),
+  KEY `messages_user_id` (`user_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 DROP TABLE IF EXISTS `message_history`;
 CREATE TABLE `message_history` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `message_id` int NOT NULL,
+  `user_id` int unsigned DEFAULT NULL,
   `sent_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `viewed` tinyint(1) NOT NULL DEFAULT 0,
   `viewed_at` DATETIME DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `message_history_message_id` (`message_id`),
-  KEY `message_history_sent_at` (`sent_at`)
+  KEY `message_history_sent_at` (`sent_at`),
+  KEY `message_history_user_id` (`user_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 DROP TABLE IF EXISTS `msglogs`;
 CREATE TABLE `msglogs` (

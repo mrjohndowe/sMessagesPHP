@@ -39,6 +39,17 @@ function setLang($locale) {
   global $lang_history_unviewed;
   global $lang_history_empty;
   global $lang_main12;
+  global $lang_login;
+  global $lang_register;
+  global $lang_username;
+  global $lang_password;
+  global $lang_logout;
+  global $lang_signed_in;
+  global $lang_auth_required;
+  global $lang_auth_invalid;
+  global $lang_auth_exists;
+  global $lang_auth_username_error;
+  global $lang_auth_password_error;
   switch ($locale) {
     case 1:
       $lang_meta="uk";
@@ -79,6 +90,17 @@ function setLang($locale) {
       $lang_history_unviewed="Не переглянуто";
       $lang_history_empty="Повідомлень ще немає.";
       $lang_main12="Використати коротке посилання";
+      $lang_login="Увійти";
+      $lang_register="Зареєструватися";
+      $lang_username="Ім’я користувача";
+      $lang_password="Пароль";
+      $lang_logout="Вийти";
+      $lang_signed_in="Ви увійшли як";
+      $lang_auth_required="Увійдіть, щоб створювати повідомлення.";
+      $lang_auth_invalid="Невірне ім’я користувача або пароль.";
+      $lang_auth_exists="Це ім’я користувача вже використовується.";
+      $lang_auth_username_error="Ім’я користувача має містити 3–32 літери, цифри, крапки, дефіси або символи підкреслення.";
+      $lang_auth_password_error="Пароль має містити щонайменше 10 символів.";
       break;
     case 2:
       $lang_meta="ru";
@@ -119,6 +141,17 @@ function setLang($locale) {
       $lang_history_unviewed="Не просмотрено";
       $lang_history_empty="Сообщений пока нет.";
       $lang_main12="Использовать короткую ссылку";
+      $lang_login="Войти";
+      $lang_register="Зарегистрироваться";
+      $lang_username="Имя пользователя";
+      $lang_password="Пароль";
+      $lang_logout="Выйти";
+      $lang_signed_in="Вы вошли как";
+      $lang_auth_required="Войдите, чтобы создавать сообщения.";
+      $lang_auth_invalid="Неверное имя пользователя или пароль.";
+      $lang_auth_exists="Это имя пользователя уже используется.";
+      $lang_auth_username_error="Имя пользователя должно содержать 3–32 буквы, цифры, точки, дефисы или символы подчеркивания.";
+      $lang_auth_password_error="Пароль должен содержать не менее 10 символов.";
       break;
     case 3:
       $lang_meta="en";
@@ -159,6 +192,17 @@ function setLang($locale) {
       $lang_history_unviewed="Not viewed";
       $lang_history_empty="No messages have been sent yet.";
       $lang_main12="Use short URL";
+      $lang_login="Log in";
+      $lang_register="Create account";
+      $lang_username="Username";
+      $lang_password="Password";
+      $lang_logout="Log out";
+      $lang_signed_in="Signed in as";
+      $lang_auth_required="Log in to create messages.";
+      $lang_auth_invalid="Invalid username or password.";
+      $lang_auth_exists="That username is already in use.";
+      $lang_auth_username_error="Username must contain 3–32 letters, numbers, periods, hyphens, or underscores.";
+      $lang_auth_password_error="Password must be at least 10 characters long.";
       break;
   }
 }
