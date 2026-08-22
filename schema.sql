@@ -6,12 +6,14 @@ CREATE TABLE `messages` (
   `lifetime` varchar(12) NOT NULL COMMENT 'How long does it valid',
   `token` varchar(40) NOT NULL COMMENT 'CSRF token',
   `link` varchar(32) NOT NULL COMMENT 'Link for external access',
+  `short_link` varchar(12) DEFAULT NULL COMMENT 'Optional built-in short URL code',
   `message` text NOT NULL COMMENT 'Encrypted message',
   `file` longtext DEFAULT NULL COMMENT 'Base64 encoded file attachment',
   `file_name` varchar(100) DEFAULT NULL COMMENT 'Original file name',
   `psk` varchar(1) NOT NULL DEFAULT '0' COMMENT 'Is encrypted with additional password?',
   `views_remaining` int unsigned NOT NULL DEFAULT 1 COMMENT 'Successful text views remaining',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `messages_short_link` (`short_link`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 DROP TABLE IF EXISTS `message_history`;
 CREATE TABLE `message_history` (

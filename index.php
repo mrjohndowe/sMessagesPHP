@@ -48,7 +48,7 @@ $options=0;
 $salt=rand(0,9).rand(0,9).rand(0,9).rand(0,9).rand(0,9).rand(0,9);
 $token=$salt.":".MD5($salt.":".$key);
 setcookie("CSRF", $token, time() + 600, "/");
-if (isset($_GET['link'])) {
+if (isset($_GET['link']) || isset($_GET['s'])) {
   header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
   header("Pragma: no-cache");
   header("Expires: 0");
@@ -267,6 +267,15 @@ if (isset($_POST['create'])) {
   }
   $encryption_iv=mb_substr($_POST['csrfToken'],0,6).mb_substr($_POST['csrfToken'],0,6)."1467";
   $link=generateRandomString();
+  $shortLink=null;
+  if (isset($_POST['shortenUrl'])) {
+    do {
+      $candidate=generateRandomString(12);
+      $shortCheck=$mysqli_dbh->prepare("SELECT 1 FROM `messages` WHERE `short_link`=? LIMIT 1");
+      $shortCheck->execute([$candidate]);
+    } while ($shortCheck->fetchColumn() !== false);
+    $shortLink=$candidate;
+  }
   $viewLimit=filter_var($_POST['viewLimit'], FILTER_VALIDATE_INT, ["options" => ["min_range" => 1, "max_range" => 100]]);
   if ($viewLimit === false) {
     echo("<script>alert('".$lang_err1."');</script>");
@@ -296,19 +305,22 @@ if (isset($_POST['create'])) {
     }
   }
   if ($_FILES['userfile']['size'] > 0) {
-    $mysqli="INSERT INTO `messages` (`created`,`lifetime`,`token`,`link`,`message`,`file`,`file_name`,`psk`,`views_remaining`) VALUES ('".time()."','".(trim(htmlspecialchars($_POST['timeValid']))*3600)."','".(trim(htmlspecialchars($_POST['csrfToken'])))."','".$link."','".$encrypted_text."','".$dataBase64."','".$_FILES['userfile']['name']."','".$psk."','".$viewLimit."')";
+    $messageInsert=$mysqli_dbh->prepare("INSERT INTO `messages` (`created`,`lifetime`,`token`,`link`,`short_link`,`message`,`file`,`file_name`,`psk`,`views_remaining`) VALUES (?,?,?,?,?,?,?,?,?,?)");
+    $messageInsert->execute([time(), trim($_POST['timeValid'])*3600, trim($_POST['csrfToken']), $link, $shortLink, $encrypted_text, $dataBase64, basename($_FILES['userfile']['name']), $psk, $viewLimit]);
   } else {
-    $mysqli="INSERT INTO `messages` (`created`,`lifetime`,`token`,`link`,`message`,`psk`,`views_remaining`) VALUES ('".time()."','".(trim(htmlspecialchars($_POST['timeValid']))*3600)."','".(trim(htmlspecialchars($_POST['csrfToken'])))."','".$link."','".$encrypted_text."','".$psk."','".$viewLimit."')";
+    $messageInsert=$mysqli_dbh->prepare("INSERT INTO `messages` (`created`,`lifetime`,`token`,`link`,`short_link`,`message`,`psk`,`views_remaining`) VALUES (?,?,?,?,?,?,?,?)");
+    $messageInsert->execute([time(), trim($_POST['timeValid'])*3600, trim($_POST['csrfToken']), $link, $shortLink, $encrypted_text, $psk, $viewLimit]);
   }
-  $mysqli_dbh->query($mysqli, PDO::FETCH_ASSOC);
   $messageId=(int)$mysqli_dbh->lastInsertId();
   $historyInsert=$mysqli_dbh->prepare("INSERT INTO `message_history` (`message_id`) VALUES (?)");
   $historyInsert->execute([$messageId]);
+  $shareQuery=$shortLink === null ? "link=".$link : "s=".$shortLink;
+  $shareUrl="https://".$_SERVER['SERVER_NAME'].$_SERVER['PHP_SELF']."?".$shareQuery;
   ?>
   <div class="bg-light p-5 rounded">
     <div class="col-sm-8 mx-auto">
       <h1><?php echo($lang_cr1);?></h1>
-      <p><a href="<?php echo("https://".$_SERVER['SERVER_NAME'].$_SERVER['PHP_SELF']."?link=".$link);?>"><?php echo("https://".$_SERVER['SERVER_NAME'].$_SERVER['PHP_SELF']."?link=".$link);?></a></p>
+      <p><a href="<?php echo(htmlspecialchars($shareUrl, ENT_QUOTES, 'UTF-8'));?>"><?php echo(htmlspecialchars($shareUrl, ENT_QUOTES, 'UTF-8'));?></a></p>
       <p><?php echo($lang_cr2);?></p>
       <p><a href="<?php echo("https://".$_SERVER['SERVER_NAME'].$_SERVER['PHP_SELF']);?>"><?php echo($lang_cr3);?></a></p>
     </div>
@@ -318,13 +330,18 @@ if (isset($_POST['create'])) {
 }
 
 //Open link function.Has Open button function to make the link unsensible to any messager preview 
-if (isset($_GET['link'])) {
-  //Doing request to DB with given link
-  $mysqli="SELECT * FROM `messages` WHERE link='".(trim(htmlspecialchars($_GET['link'])))."'";
-  $data=$mysqli_dbh->query($mysqli, PDO::FETCH_ASSOC);
-  $count=$data->rowCount();
+if (isset($_GET['link']) || isset($_GET['s'])) {
+  //Resolve either the standard secret link or its optional built-in alias.
+  if (isset($_GET['s'])) {
+    $messageLookup=$mysqli_dbh->prepare("SELECT * FROM `messages` WHERE `short_link`=? LIMIT 1");
+    $messageLookup->execute([trim($_GET['s'])]);
+  } else {
+    $messageLookup=$mysqli_dbh->prepare("SELECT * FROM `messages` WHERE `link`=? LIMIT 1");
+    $messageLookup->execute([trim($_GET['link'])]);
+  }
+  $result=$messageLookup->fetch(PDO::FETCH_ASSOC);
   //Does this link exists at all
-  if ($count <= 0){
+  if ($result === false){
   ?>
   <div class="bg-light p-5 rounded">
     <div class="col-sm-8 mx-auto">
@@ -337,17 +354,15 @@ if (isset($_GET['link'])) {
   die();
   }
   //collecting all necessary data from DB about this link
-  foreach ($data as $key2 => $result) {
-    $encrypted_text=$result['message'];
-    $token=$result['token'];
-    $lifetime=$result['lifetime'];
-    $created=$result['created'];
-    $id=$result['id'];
-    $link=$result['link'];
-    $file=$result['file'];
-    $fileName=$result['file_name'];
-    $isPsk=$result['psk'];
-  }
+  $encrypted_text=$result['message'];
+  $token=$result['token'];
+  $lifetime=$result['lifetime'];
+  $created=$result['created'];
+  $id=$result['id'];
+  $link=$result['link'];
+  $file=$result['file'];
+  $fileName=$result['file_name'];
+  $isPsk=$result['psk'];
   //Checking does the link is still valid
   if (($created+$lifetime) < time()) {
     ?>
@@ -495,6 +510,10 @@ if (isset($_GET['link'])) {
           <label for="hoursInput"><?php echo($lang_main4);?></label>
           <input type="number" style="width: 210px;" class="form-control" id="viewsInput" min="1" max="100" value="1" name="viewLimit" required>
           <label for="viewsInput"><?php echo($lang_main11);?></label>
+          <div class="form-check my-3">
+            <input class="form-check-input" id="shortenUrl" name="shortenUrl" type="checkbox" value="1">
+            <label class="form-check-label" for="shortenUrl"><?php echo($lang_main12);?></label>
+          </div>
           <input type="text" style="width: 210px;" class="form-control" id="pskInput" value="" name="pskInput">
           <label for="pskInput"><?php echo($lang_main7);?></label>
           <input class="form-control" style="width: 210px;" id="userfile" name="userfile" type="file" />

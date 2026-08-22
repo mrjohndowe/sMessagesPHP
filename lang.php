@@ -38,6 +38,7 @@ function setLang($locale) {
   global $lang_history_viewed;
   global $lang_history_unviewed;
   global $lang_history_empty;
+  global $lang_main12;
   switch ($locale) {
     case 1:
       $lang_meta="uk";
@@ -77,6 +78,7 @@ function setLang($locale) {
       $lang_history_viewed="Переглянуто";
       $lang_history_unviewed="Не переглянуто";
       $lang_history_empty="Повідомлень ще немає.";
+      $lang_main12="Використати коротке посилання";
       break;
     case 2:
       $lang_meta="ru";
@@ -116,6 +118,7 @@ function setLang($locale) {
       $lang_history_viewed="Просмотрено";
       $lang_history_unviewed="Не просмотрено";
       $lang_history_empty="Сообщений пока нет.";
+      $lang_main12="Использовать короткую ссылку";
       break;
     case 3:
       $lang_meta="en";
@@ -155,6 +158,7 @@ function setLang($locale) {
       $lang_history_viewed="Viewed";
       $lang_history_unviewed="Not viewed";
       $lang_history_empty="No messages have been sent yet.";
+      $lang_main12="Use short URL";
       break;
   }
 }
