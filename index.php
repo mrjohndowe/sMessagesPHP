@@ -50,6 +50,11 @@ $options=0;
 $salt=rand(0,9).rand(0,9).rand(0,9).rand(0,9).rand(0,9).rand(0,9);
 $token=$salt.":".MD5($salt.":".$key);
 setcookie("CSRF", $token, time() + 600, "/");
+if (isset($_GET['link'])) {
+  header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+  header("Pragma: no-cache");
+  header("Expires: 0");
+}
 
 //daily function to clean all expired data in DB
 if (isset($_GET['clean'])) {
@@ -88,6 +93,34 @@ function generateRandomString($length = 32) {
     $randomString .= $characters[random_int(0, $charactersLength - 1)];
   }
   return $randomString;
+}
+
+//Atomically reserve one permitted view. Only the request that decrements the
+//counter is allowed to receive the decrypted message.
+function consumeMessageView($mysqli_dbh, $id) {
+  $consume=$mysqli_dbh->prepare("UPDATE `messages` SET `views_remaining`=`views_remaining`-1 WHERE `id`=? AND `views_remaining`>0");
+  $consume->execute([$id]);
+  return $consume->rowCount() === 1;
+}
+
+function finishMessageView($mysqli_dbh, $id, $fileName, $link) {
+  $remainingQuery=$mysqli_dbh->prepare("SELECT `views_remaining` FROM `messages` WHERE `id`=?");
+  $remainingQuery->execute([$id]);
+  $viewsRemaining=$remainingQuery->fetchColumn();
+
+  if ($viewsRemaining !== false && (int)$viewsRemaining <= 0) {
+    if (!empty($fileName)) {
+      $destroy=$mysqli_dbh->prepare("UPDATE `messages` SET `message`='' WHERE `id`=?");
+    } else {
+      $destroy=$mysqli_dbh->prepare("DELETE FROM `messages` WHERE `id`=?");
+    }
+    $destroy->execute([$id]);
+  }
+
+  $requestScheme=$_SERVER['REQUEST_SCHEME'] ?? 'https';
+  $messageUrl=$requestScheme."://".$_SERVER['SERVER_NAME']."/?link=".$link;
+  $log=$mysqli_dbh->prepare("INSERT INTO `msglogs` (`msgid`,`msglink`,`ip`,`type`) VALUES (?,?,?,'text')");
+  $log->execute([$id, $messageUrl, $_SERVER['REMOTE_ADDR']]);
 }
 
 if (!isset($_POST['dwlAttachment'])) {?>
@@ -207,6 +240,7 @@ if (!isset($_POST['dwlAttachment'])) {?>
         document.body.classList.toggle('privacy-hidden', document.hidden);
       });
       window.addEventListener('pagehide', function () {
+        message.textContent = '';
         document.body.classList.add('privacy-hidden');
       });
     });
@@ -216,7 +250,7 @@ if (!isset($_POST['dwlAttachment'])) {?>
 //Create link and secure data function
 if (isset($_POST['create'])) {
   //check all variables are set and not empty
-  if ((!isset($_POST['textMain'])) || (!isset($_POST['timeValid'])) || ((empty($_POST['textMain'])) && ($_FILES['userfile']['size'] == 0)) || (empty($_POST['timeValid']))) {
+  if ((!isset($_POST['textMain'])) || (!isset($_POST['timeValid'])) || (!isset($_POST['viewLimit'])) || ((empty($_POST['textMain'])) && ($_FILES['userfile']['size'] == 0)) || (empty($_POST['timeValid']))) {
     echo("<script>alert('".$lang_err1."');</script>");
     echo("<p>".$lang_err1."</p>");
     echo("<p><a href=\"https://".$_SERVER['SERVER_NAME'].$_SERVER['PHP_SELF']."\">".$lang_ret."</a></p>");
@@ -229,6 +263,11 @@ if (isset($_POST['create'])) {
   }
   $encryption_iv=mb_substr($_POST['csrfToken'],0,6).mb_substr($_POST['csrfToken'],0,6)."1467";
   $link=generateRandomString();
+  $viewLimit=filter_var($_POST['viewLimit'], FILTER_VALIDATE_INT, ["options" => ["min_range" => 1, "max_range" => 100]]);
+  if ($viewLimit === false) {
+    echo("<script>alert('".$lang_err1."');</script>");
+    die();
+  }
   $encryption_key=$key;
   if (!empty($_POST['textMain'])) {
     $encrypted_text=openssl_encrypt(trim(htmlspecialchars($_POST['textMain'])), $ciphering, $encryption_key, $options, $encryption_iv);
@@ -253,9 +292,9 @@ if (isset($_POST['create'])) {
     }
   }
   if ($_FILES['userfile']['size'] > 0) {
-    $mysqli="INSERT INTO `messages` (`created`,`lifetime`,`token`,`link`,`message`,`file`,`file_name`,`psk`) VALUES ('".time()."','".(trim(htmlspecialchars($_POST['timeValid']))*3600)."','".(trim(htmlspecialchars($_POST['csrfToken'])))."','".$link."','".$encrypted_text."','".$dataBase64."','".$_FILES['userfile']['name']."','".$psk."')";
+    $mysqli="INSERT INTO `messages` (`created`,`lifetime`,`token`,`link`,`message`,`file`,`file_name`,`psk`,`views_remaining`) VALUES ('".time()."','".(trim(htmlspecialchars($_POST['timeValid']))*3600)."','".(trim(htmlspecialchars($_POST['csrfToken'])))."','".$link."','".$encrypted_text."','".$dataBase64."','".$_FILES['userfile']['name']."','".$psk."','".$viewLimit."')";
   } else {
-    $mysqli="INSERT INTO `messages` (`created`,`lifetime`,`token`,`link`,`message`,`psk`) VALUES ('".time()."','".(trim(htmlspecialchars($_POST['timeValid']))*3600)."','".(trim(htmlspecialchars($_POST['csrfToken'])))."','".$link."','".$encrypted_text."','".$psk."')";
+    $mysqli="INSERT INTO `messages` (`created`,`lifetime`,`token`,`link`,`message`,`psk`,`views_remaining`) VALUES ('".time()."','".(trim(htmlspecialchars($_POST['timeValid']))*3600)."','".(trim(htmlspecialchars($_POST['csrfToken'])))."','".$link."','".$encrypted_text."','".$psk."','".$viewLimit."')";
   }
   $mysqli_dbh->query($mysqli, PDO::FETCH_ASSOC);
   ?>
@@ -340,6 +379,11 @@ if (isset($_GET['link'])) {
   //if "open" value is set, but message is not encrypted by PSK, and this is not download option - showing up encrypted message from this link
   if (isset($_POST['open']) && (!isset($_POST['pskOpInput'])) && (!isset($_POST['dwlAttachment']))) {
     $encryption_iv=mb_substr($token,0,6).mb_substr($token,0,6)."1467";
+    if (!consumeMessageView($mysqli_dbh, $id)) {
+      echo("<p><font color=\"red\">".$lang_err7."</font></p>");
+      die();
+    }
+    finishMessageView($mysqli_dbh, $id, $fileName, $link);
     ?>
     <div class="bg-light p-5 rounded">
       <div class="col-sm-8 mx-auto">
@@ -359,17 +403,7 @@ if (isset($_GET['link'])) {
         <div><form method="POST" action="">
         <button class="btn-lg btn-primary" style="width1: 95vw;" type="submit" name="dwlAttachment"><?php echo($lang_main6);?></button>
         </form></div>
-        <?php 
-          $mysqli="UPDATE `messages` set message='' WHERE id='".$id."'";
-          $mysqli_dbh->query($mysqli, PDO::FETCH_ASSOC);
-          $mysqli="INSERT INTO `msglogs` (`msgid`,`msglink`,`ip`,`type`) VALUES ('".$id."','".$_SERVER["REQUEST_SCHEME"]."://".$_SERVER["SERVER_NAME"]."/?link=".$link."','".$_SERVER['REMOTE_ADDR']."','text');";
-          $mysqli_dbh->query($mysqli, PDO::FETCH_ASSOC);
-        } else {
-          $mysqli="DELETE FROM `messages` WHERE id='".$id."'";
-          $mysqli_dbh->query($mysqli, PDO::FETCH_ASSOC);
-          $mysqli="INSERT INTO `msglogs` (`msgid`,`msglink`,`ip`,`type`) VALUES ('".$id."','".$_SERVER["REQUEST_SCHEME"]."://".$_SERVER["SERVER_NAME"]."/?link=".$link."','".$_SERVER['REMOTE_ADDR']."','text');";
-          $mysqli_dbh->query($mysqli, PDO::FETCH_ASSOC); 
-        }
+        <?php } 
         echo("<br><p><a href=\"https://".$_SERVER['SERVER_NAME'].$_SERVER['PHP_SELF']."\">".$lang_ret."</a></p>"); ?>
       </div>
     </div>
@@ -379,55 +413,41 @@ if (isset($_GET['link'])) {
   //when we open a message with additional password encoding
   if (isset($_POST['open']) && (isset($_POST['pskOpInput']))) {
     $encryption_iv=mb_substr($token,0,6).mb_substr($token,0,6)."1467";
-    //now when we got a PSK - we decrypt the attachment from user's password if it exists
-    if (!empty($fileName) && (!empty($_POST['pskOpInput']))) {
-      $decrypted_file=openssl_decrypt($file,$ciphering,$_POST['pskOpInput'],$options,$encryption_iv);
-      $mysqli="UPDATE `messages` SET file='".$decrypted_file."' WHERE id='".$id."';";
-      $mysqli_dbh->query($mysqli, PDO::FETCH_ASSOC);
+    if (empty($_POST['pskOpInput'])) {
+      echo("<script>alert('".$lang_err8."');</script>");
+      echo("<p><font color=\"red\">".$lang_err8."</font></p>");
+      echo("<p><a href=\"https://".$_SERVER['SERVER_NAME'].$_SERVER['REQUEST_URI']."\">".$lang_main10."</a></p>");
+      die();
     }
+    $decrypted_text=openssl_decrypt($encrypted_text, $ciphering, $_POST['pskOpInput'], $options, $encryption_iv);
+    $decrypted_text=openssl_decrypt($decrypted_text, $ciphering, $key, $options, $encryption_iv);
+    if (empty($decrypted_text)) {
+      echo("<p><font color=\"red\">".$lang_err9."</font></p>");
+      die();
+    }
+    if (!consumeMessageView($mysqli_dbh, $id)) {
+      echo("<p><font color=\"red\">".$lang_err7."</font></p>");
+      die();
+    }
+    //Decrypt the attachment layer only after the password has been validated.
+    if (!empty($fileName)) {
+      $decrypted_file=openssl_decrypt($file,$ciphering,$_POST['pskOpInput'],$options,$encryption_iv);
+      $updateFile=$mysqli_dbh->prepare("UPDATE `messages` SET `file`=? WHERE `id`=?");
+      $updateFile->execute([$decrypted_file, $id]);
+    }
+    finishMessageView($mysqli_dbh, $id, $fileName, $link);
     ?>
     <div class="bg-light p-5 rounded">
       <div class="col-sm-8 mx-auto">
         <h1><?php echo($lang_text);?></h1>  
          <h3><pre class="protected-message" aria-label="<?php echo htmlspecialchars($lang_text, ENT_QUOTES, 'UTF-8'); ?>"><?php
-         if (empty($_POST['pskOpInput']))
-         {
-          echo("<script>alert('".$lang_err8."');</script>");
-          echo("<p><font color=\"red\">".$lang_err8."</font></p>");
-          echo("<p><a href=\"https://".$_SERVER['SERVER_NAME'].$_SERVER['REQUEST_URI']."\">".$lang_main10."</a></p>");
-          die();
-         }
-         //if 'message' field in DB is not empty that means the message wasn't viewed 
-         if (!empty($encrypted_text)) {
-          $decrypted_text=openssl_decrypt($encrypted_text, $ciphering, $_POST['pskOpInput'], $options, $encryption_iv);
-          $decrypted_text=openssl_decrypt($decrypted_text, $ciphering, $key, $options, $encryption_iv);
-          //if 'decrypted_text' is not empty that means the PSK is correct
-          if (!empty($decrypted_text)) {
-            echo($decrypted_text); 
-          } else {
-            //if 'decrypted_text' is empty that means the PSK is incorrect.Show error message.
-            echo("<font color=\"red\">".$lang_err9."</font>");
-          }
-        } else { 
-          echo("<font color=\"red\">$lang_err7</font>"); 
-        }?>
+         echo($decrypted_text);?>
         </pre></h3>
          <?php if (!empty($fileName)) {?>
          <div><form method="POST" action="">
           <button class="btn-lg btn-primary" style="width1: 95vw;" type="submit" name="dwlAttachment"><?php echo($lang_main6);?></button>
           </form></div>
-          <?php
-            $mysqli="UPDATE `messages` set message='' WHERE id='".$id."'";
-            $mysqli_dbh->query($mysqli, PDO::FETCH_ASSOC);
-            $mysqli="INSERT INTO `msglogs` (`msgid`,`msglink`,`ip`,`type`) VALUES ('".$id."','".$_SERVER["REQUEST_SCHEME"]."://".$_SERVER["SERVER_NAME"]."/?link=".$link."','".$_SERVER['REMOTE_ADDR']."','text');";
-            $mysqli_dbh->query($mysqli, PDO::FETCH_ASSOC);
-
-          } else {
-            $mysqli="DELETE FROM `messages` WHERE id='".$id."'";
-            $mysqli_dbh->query($mysqli, PDO::FETCH_ASSOC);
-            $mysqli="INSERT INTO `msglogs` (`msgid`,`msglink`,`ip`,`type`) VALUES ('".$id."','".$_SERVER["REQUEST_SCHEME"]."://".$_SERVER["SERVER_NAME"]."/?link=".$link."','".$_SERVER['REMOTE_ADDR']."','text');";
-            $mysqli_dbh->query($mysqli, PDO::FETCH_ASSOC); 
-          }
+          <?php } 
           echo("<br><p><a href=\"https://".$_SERVER['SERVER_NAME'].$_SERVER['PHP_SELF']."\">".$lang_ret."</a></p>"); ?>
           </div>
         </div>
@@ -464,6 +484,8 @@ if (isset($_GET['link'])) {
         <div class="form-floating1 mb-1">
           <input type="number" style="width: 210px;" class="form-control" id="hoursInput" min="0" max="24" value="1" name="timeValid">
           <label for="hoursInput"><?php echo($lang_main4);?></label>
+          <input type="number" style="width: 210px;" class="form-control" id="viewsInput" min="1" max="100" value="1" name="viewLimit" required>
+          <label for="viewsInput"><?php echo($lang_main11);?></label>
           <input type="text" style="width: 210px;" class="form-control" id="pskInput" value="" name="pskInput">
           <label for="pskInput"><?php echo($lang_main7);?></label>
           <input class="form-control" style="width: 210px;" id="userfile" name="userfile" type="file" />

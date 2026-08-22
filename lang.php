@@ -31,6 +31,7 @@ function setLang($locale) {
   global $lang_text;
   global $lang_theme_dark;
   global $lang_theme_light;
+  global $lang_main11;
   switch ($locale) {
     case 1:
       $lang_meta="uk";
@@ -53,7 +54,7 @@ function setLang($locale) {
       $lang_err6="Строк життя посилання закiнчився. Воно бiльше не доступно, як i даннi, що були там.";
       $lang_err7="Повiдомлення вже було переглянуто.Залишився тiльки файл.";
       $lang_err8="Ви не ввели пароль для розшифрування повiдомлення.";
-      $lang_err9="Не вiрний пароль.Повiдомлення знищено.";
+      $lang_err9="Не вiрний пароль.Перегляд не зараховано.";
       $lang_cr1="Ось ваше тимчасове посилання:";
       $lang_cr2="Скопiюйте його та передайте кому вважаєте за потрiбне. Це посилання можна буде вiдкрити тiльки один раз.";
       $lang_cr3="Створити ще одне";
@@ -63,6 +64,7 @@ function setLang($locale) {
       $lang_text="Ось текст що був зашифрован:";
       $lang_theme_dark="Темна тема";
       $lang_theme_light="Світла тема";
+      $lang_main11="Кількість переглядів";
       break;
     case 2:
       $lang_meta="ru";
@@ -85,7 +87,7 @@ function setLang($locale) {
       $lang_err6="Срок жизни ссылки закончился. Оно больше не доступно, як и данные, что были там.";
       $lang_err7="Сообщение уже было просмотрено.Остался только файл.";
       $lang_err8="Вы не ввели пароль для расшифровки сообщения";
-      $lang_err9="Неправильный пароль.Сообщение удалено.";
+      $lang_err9="Неправильный пароль.Просмотр не засчитан.";
       $lang_cr1="вот ваша временная ссылка:";
       $lang_cr2="Скопируйте его и передайте кому считаете нужным. Эта ссылка может быть открыта только один раз.";
       $lang_cr3="Создать еще одно";
@@ -95,6 +97,7 @@ function setLang($locale) {
       $lang_text="Вот текст что был зашифрован:";
       $lang_theme_dark="Тёмная тема";
       $lang_theme_light="Светлая тема";
+      $lang_main11="Количество просмотров";
       break;
     case 3:
       $lang_meta="en";
@@ -117,7 +120,7 @@ function setLang($locale) {
       $lang_err6="Link's lifetime has expired. It is unavailable, like the data it contained.";
       $lang_err7="The message have already been seen.Only attached file left.";
       $lang_err8="You didn't type a password.";
-      $lang_err9="Wrong password.Message was destroyed.";
+      $lang_err9="Wrong password. The view was not consumed.";
       $lang_cr1="this is your temporarily link:";
       $lang_cr2="Copy it and share with anybody you want. This link can be opened just once.";
       $lang_cr3="Create another one";
@@ -127,6 +130,7 @@ function setLang($locale) {
       $lang_text="Here is your data that was encrypted:";
       $lang_theme_dark="Dark mode";
       $lang_theme_light="Light mode";
+      $lang_main11="Number of views";
       break;
   }
 }

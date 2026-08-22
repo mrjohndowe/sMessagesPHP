@@ -10,6 +10,7 @@ CREATE TABLE `messages` (
   `file` longtext DEFAULT NULL COMMENT 'Base64 encoded file attachment',
   `file_name` varchar(100) DEFAULT NULL COMMENT 'Original file name',
   `psk` varchar(1) NOT NULL DEFAULT '0' COMMENT 'Is encrypted with additional password?',
+  `views_remaining` int unsigned NOT NULL DEFAULT 1 COMMENT 'Successful text views remaining',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 DROP TABLE IF EXISTS `msglogs`;
