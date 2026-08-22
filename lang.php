@@ -50,6 +50,9 @@ function setLang($locale) {
   global $lang_auth_exists;
   global $lang_auth_username_error;
   global $lang_auth_password_error;
+  global $lang_history_read;
+  global $lang_history_unavailable;
+  global $lang_your_message;
   switch ($locale) {
     case 1:
       $lang_meta="uk";
@@ -101,6 +104,9 @@ function setLang($locale) {
       $lang_auth_exists="Це ім’я користувача вже використовується.";
       $lang_auth_username_error="Ім’я користувача має містити 3–32 літери, цифри, крапки, дефіси або символи підкреслення.";
       $lang_auth_password_error="Пароль має містити щонайменше 10 символів.";
+      $lang_history_read="Прочитати";
+      $lang_history_unavailable="Текст цього повідомлення недоступний.";
+      $lang_your_message="Ваше початкове повідомлення";
       break;
     case 2:
       $lang_meta="ru";
@@ -152,6 +158,9 @@ function setLang($locale) {
       $lang_auth_exists="Это имя пользователя уже используется.";
       $lang_auth_username_error="Имя пользователя должно содержать 3–32 буквы, цифры, точки, дефисы или символы подчеркивания.";
       $lang_auth_password_error="Пароль должен содержать не менее 10 символов.";
+      $lang_history_read="Прочитать";
+      $lang_history_unavailable="Текст этого сообщения недоступен.";
+      $lang_your_message="Ваше исходное сообщение";
       break;
     case 3:
       $lang_meta="en";
@@ -203,6 +212,9 @@ function setLang($locale) {
       $lang_auth_exists="That username is already in use.";
       $lang_auth_username_error="Username must contain 3–32 letters, numbers, periods, hyphens, or underscores.";
       $lang_auth_password_error="Password must be at least 10 characters long.";
+      $lang_history_read="Read";
+      $lang_history_unavailable="The text for this message is unavailable.";
+      $lang_your_message="Your original message";
       break;
   }
 }

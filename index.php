@@ -135,7 +135,7 @@ if (isset($_POST['logout']) && csrfIsValid()) {
   header("Location: ".$_SERVER['PHP_SELF']);
   die();
 }
-if (isset($_GET['link']) || isset($_GET['s'])) {
+if (isset($_GET['link']) || isset($_GET['s']) || isset($_POST['viewOwnMessage'])) {
   header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
   header("Pragma: no-cache");
   header("Expires: 0");
@@ -338,6 +338,35 @@ if (!isset($_POST['dwlAttachment'])) {?>
   }());
 </script>
 <?php }
+//Authenticated creators can re-read their separately encrypted sender copy.
+if (isset($_POST['viewOwnMessage'])) {
+  if (empty($_SESSION['user_id']) || !csrfIsValid()) {
+    http_response_code(403);
+    echo("<p>".$lang_auth_required."</p>");
+    die();
+  }
+  $historyId=filter_var($_POST['historyId'] ?? null, FILTER_VALIDATE_INT, ["options" => ["min_range" => 1]]);
+  $senderCopyQuery=$mysqli_dbh->prepare("SELECT `sender_copy`,`sender_token` FROM `message_history` WHERE `id`=? AND `user_id`=? LIMIT 1");
+  $senderCopyQuery->execute([$historyId, $_SESSION['user_id']]);
+  $senderCopy=$senderCopyQuery->fetch(PDO::FETCH_ASSOC);
+  if ($senderCopy === false || empty($senderCopy['sender_copy']) || empty($senderCopy['sender_token'])) {
+    echo("<p>".$lang_history_unavailable."</p>");
+    echo("<p><a href=\"".htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8')."\">".$lang_ret."</a></p>");
+    die();
+  }
+  $senderIv=mb_substr($senderCopy['sender_token'],0,6).mb_substr($senderCopy['sender_token'],0,6)."1467";
+  $originalText=openssl_decrypt($senderCopy['sender_copy'], $ciphering, $key, $options, $senderIv);
+  ?>
+  <div class="bg-light p-5 rounded">
+    <div class="col-sm-8 mx-auto">
+      <h1><?php echo($lang_your_message);?></h1>
+      <pre class="p-3 border rounded"><?php echo($originalText);?></pre>
+      <p><a href="<?php echo(htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'));?>"><?php echo($lang_ret);?></a></p>
+    </div>
+  </div>
+  <?php
+  die();
+}
 //Create link and secure data function
 if (isset($_POST['create'])) {
   if (empty($_SESSION['user_id'])) {
@@ -374,8 +403,10 @@ if (isset($_POST['create'])) {
     die();
   }
   $encryption_key=$key;
+  $senderCopy=null;
   if (!empty($_POST['textMain'])) {
-    $encrypted_text=openssl_encrypt(trim(htmlspecialchars($_POST['textMain'])), $ciphering, $encryption_key, $options, $encryption_iv);
+    $senderCopy=openssl_encrypt(trim(htmlspecialchars($_POST['textMain'])), $ciphering, $encryption_key, $options, $encryption_iv);
+    $encrypted_text=$senderCopy;
     if (!empty($_POST['pskInput'])) {
       $encrypted_text=openssl_encrypt($encrypted_text, $ciphering, $_POST['pskInput'], $options, $encryption_iv);
       $psk="1";
@@ -404,8 +435,8 @@ if (isset($_POST['create'])) {
     $messageInsert->execute([$_SESSION['user_id'], time(), trim($_POST['timeValid'])*3600, trim($_POST['csrfToken']), $link, $shortLink, $encrypted_text, $psk, $viewLimit]);
   }
   $messageId=(int)$mysqli_dbh->lastInsertId();
-  $historyInsert=$mysqli_dbh->prepare("INSERT INTO `message_history` (`message_id`,`user_id`) VALUES (?,?)");
-  $historyInsert->execute([$messageId, $_SESSION['user_id']]);
+  $historyInsert=$mysqli_dbh->prepare("INSERT INTO `message_history` (`message_id`,`user_id`,`sender_copy`,`sender_token`) VALUES (?,?,?,?)");
+  $historyInsert->execute([$messageId, $_SESSION['user_id'], $senderCopy, $senderCopy === null ? null : trim($_POST['csrfToken'])]);
   $shareQuery=$shortLink === null ? "link=".$link : "s=".$shortLink;
   $shareUrl="https://".$_SERVER['SERVER_NAME'].$_SERVER['PHP_SELF']."?".$shareQuery;
   ?>
@@ -630,7 +661,7 @@ if (isset($_GET['link']) || isset($_GET['s'])) {
     <section class="mt-4 mb-4 p-4 border rounded-3 bg-light" aria-labelledby="message-history-heading">
       <h2 id="message-history-heading" class="h4 mb-3"><?php echo($lang_history);?></h2>
       <?php
-      $historyQuery=$mysqli_dbh->prepare("SELECT `sent_at`,`viewed` FROM `message_history` WHERE `user_id`=? ORDER BY `sent_at` DESC, `id` DESC");
+      $historyQuery=$mysqli_dbh->prepare("SELECT `id`,`sent_at`,`viewed`,(`sender_copy` IS NOT NULL) AS `can_read` FROM `message_history` WHERE `user_id`=? ORDER BY `sent_at` DESC, `id` DESC");
       $historyQuery->execute([$_SESSION['user_id']]);
       $historyRows=$historyQuery->fetchAll(PDO::FETCH_ASSOC);
       if (empty($historyRows)) { ?>
@@ -642,6 +673,7 @@ if (isset($_GET['link']) || isset($_GET['s'])) {
               <tr>
                 <th scope="col"><?php echo($lang_history_sent);?></th>
                 <th scope="col"><?php echo($lang_history_status);?></th>
+                <th scope="col"><span class="visually-hidden"><?php echo($lang_history_read);?></span></th>
               </tr>
             </thead>
             <tbody>
@@ -653,6 +685,15 @@ if (isset($_GET['link']) || isset($_GET['s'])) {
                     <span class="badge bg-success"><?php echo($lang_history_viewed);?></span>
                   <?php } else { ?>
                     <span class="badge bg-secondary"><?php echo($lang_history_unviewed);?></span>
+                  <?php } ?>
+                </td>
+                <td class="text-end">
+                  <?php if ((int)$historyRow['can_read'] === 1) { ?>
+                    <form method="POST" class="m-0">
+                      <input type="hidden" name="csrfToken" value="<?php echo($token);?>">
+                      <input type="hidden" name="historyId" value="<?php echo((int)$historyRow['id']);?>">
+                      <button class="btn btn-outline-primary btn-sm" type="submit" name="viewOwnMessage"><?php echo($lang_history_read);?></button>
+                    </form>
                   <?php } ?>
                 </td>
               </tr>

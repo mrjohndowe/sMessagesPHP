@@ -8,6 +8,7 @@ This small simple PHP script allows you to secure share any text data via any me
 - The home page shows a metadata-only message history with the sent date/time and whether each message has been viewed. Message text, attachments, passwords, and links are never included in this history.
 - Senders can optionally generate a private built-in short URL. The short code is resolved locally and is never shared with an external URL-shortening service.
 - Message creation is account-based. Recipients can still open shared links without an account, while signed-in senders see only their own message history.
+- Newly created text messages keep a separately encrypted sender copy so the authenticated creator can re-read the original from private history after the recipient copy is destroyed.
 - You share this link via any messanger. The messenger can't see your data while creating a preview of the typed link.
 - The receiver opens the link. 
     - If everything is ok, he sees a confirmation dialog to show the encrypted data.After confirmation, the receiver sees your text.The link can't be opened anymore.

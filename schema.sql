@@ -34,6 +34,8 @@ CREATE TABLE `message_history` (
   `sent_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `viewed` tinyint(1) NOT NULL DEFAULT 0,
   `viewed_at` DATETIME DEFAULT NULL,
+  `sender_copy` longtext DEFAULT NULL COMMENT 'Encrypted text retained for the authenticated creator',
+  `sender_token` varchar(40) DEFAULT NULL COMMENT 'Token used to derive the sender-copy IV',
   PRIMARY KEY (`id`),
   UNIQUE KEY `message_history_message_id` (`message_id`),
   KEY `message_history_sent_at` (`sent_at`),
