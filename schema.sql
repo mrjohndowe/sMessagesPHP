@@ -13,6 +13,17 @@ CREATE TABLE `messages` (
   `views_remaining` int unsigned NOT NULL DEFAULT 1 COMMENT 'Successful text views remaining',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+DROP TABLE IF EXISTS `message_history`;
+CREATE TABLE `message_history` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `message_id` int NOT NULL,
+  `sent_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `viewed` tinyint(1) NOT NULL DEFAULT 0,
+  `viewed_at` DATETIME DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `message_history_message_id` (`message_id`),
+  KEY `message_history_sent_at` (`sent_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 DROP TABLE IF EXISTS `msglogs`;
 CREATE TABLE `msglogs` (
   `id` int(11) NOT NULL AUTO_INCREMENT,

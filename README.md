@@ -5,6 +5,7 @@ This small simple PHP script allows you to secure share any text data via any me
 - You type text and than it is being encrypted by SHA256 algorythm and stored in MySQL database.
 - After that you get an uniq URL link to this encrypted data. This link is alive only during time you have selected.1 hour default.
 - You select how many successful views are allowed (1-100). Each successful view consumes one, and the encrypted message is destroyed when none remain.
+- The home page shows a metadata-only message history with the sent date/time and whether each message has been viewed. Message text, attachments, passwords, and links are never included in this history.
 - You share this link via any messanger. The messenger can't see your data while creating a preview of the typed link.
 - The receiver opens the link. 
     - If everything is ok, he sees a confirmation dialog to show the encrypted data.After confirmation, the receiver sees your text.The link can't be opened anymore.

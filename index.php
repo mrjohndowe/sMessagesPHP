@@ -28,9 +28,7 @@ else {
   die();
 }
 //include language strings for translation
-if (isset($_SERVER["HTTP_ACCEPT_LANGUAGE"])) {
-  $lng=$_SERVER["HTTP_ACCEPT_LANGUAGE"];
-}
+$lng=$_SERVER["HTTP_ACCEPT_LANGUAGE"] ?? "";
 if (strpos($lng,"uk-UA")) {
   setLang(1);
 } elseif (strpos($lng,"ru")) { 
@@ -76,7 +74,7 @@ if (isset($_GET['clean'])) {
     if (($created+$lifetime) < $currtime) {
       $mysqli="DELETE FROM `messages` WHERE id='".$id."'";
       $mysqli_dbh->query($mysqli, PDO::FETCH_ASSOC);
-      $mysqli="INSERT INTO `msglogs` (`msgid`,`msglink`,`ip`) VALUES ('".$id."','".$_SERVER["REQUEST_SCHEME"]."://".$_SERVER["SERVER_NAME"]."/?link=".$link."','expired,unread');";
+      $mysqli="INSERT INTO `msglogs` (`msgid`,`msglink`,`ip`,`type`) VALUES ('".$id."','".$_SERVER["REQUEST_SCHEME"]."://".$_SERVER["SERVER_NAME"]."/?link=".$link."','expired,unread','expired');";
       $mysqli_dbh->query($mysqli, PDO::FETCH_ASSOC);
       $counter++;
     }
@@ -121,6 +119,8 @@ function finishMessageView($mysqli_dbh, $id, $fileName, $link) {
   $messageUrl=$requestScheme."://".$_SERVER['SERVER_NAME']."/?link=".$link;
   $log=$mysqli_dbh->prepare("INSERT INTO `msglogs` (`msgid`,`msglink`,`ip`,`type`) VALUES (?,?,?,'text')");
   $log->execute([$id, $messageUrl, $_SERVER['REMOTE_ADDR']]);
+  $history=$mysqli_dbh->prepare("UPDATE `message_history` SET `viewed`=1, `viewed_at`=COALESCE(`viewed_at`, CURRENT_TIMESTAMP) WHERE `message_id`=?");
+  $history->execute([$id]);
 }
 
 if (!isset($_POST['dwlAttachment'])) {?>
@@ -164,6 +164,10 @@ if (!isset($_POST['dwlAttachment'])) {?>
       :root[data-theme="dark"] .form-floating > label { color: #adb5bd; }
       :root[data-theme="dark"] a { color: #8bb9fe; }
       :root[data-theme="dark"] hr { border-color: #495057; }
+      :root[data-theme="dark"] .table {
+        color: #f1f3f5;
+        border-color: #495057;
+      }
       .theme-toggle {
         position: fixed;
         z-index: 1000;
@@ -297,6 +301,9 @@ if (isset($_POST['create'])) {
     $mysqli="INSERT INTO `messages` (`created`,`lifetime`,`token`,`link`,`message`,`psk`,`views_remaining`) VALUES ('".time()."','".(trim(htmlspecialchars($_POST['timeValid']))*3600)."','".(trim(htmlspecialchars($_POST['csrfToken'])))."','".$link."','".$encrypted_text."','".$psk."','".$viewLimit."')";
   }
   $mysqli_dbh->query($mysqli, PDO::FETCH_ASSOC);
+  $messageId=(int)$mysqli_dbh->lastInsertId();
+  $historyInsert=$mysqli_dbh->prepare("INSERT INTO `message_history` (`message_id`) VALUES (?)");
+  $historyInsert->execute([$messageId]);
   ?>
   <div class="bg-light p-5 rounded">
     <div class="col-sm-8 mx-auto">
@@ -465,6 +472,8 @@ if (isset($_GET['link'])) {
     $mysqli_dbh->query($mysqli, PDO::FETCH_ASSOC);
     $mysqli="INSERT INTO `msglogs` (`msgid`,`msglink`,`ip`,`type`) VALUES ('".$id."','".$_SERVER["REQUEST_SCHEME"]."://".$_SERVER["SERVER_NAME"]."/?link=".$link."','".$_SERVER['REMOTE_ADDR']."','file');";
     $mysqli_dbh->query($mysqli, PDO::FETCH_ASSOC);
+    $history=$mysqli_dbh->prepare("UPDATE `message_history` SET `viewed`=1, `viewed_at`=COALESCE(`viewed_at`, CURRENT_TIMESTAMP) WHERE `message_id`=?");
+    $history->execute([$id]);
     die();
   }
 }
@@ -495,7 +504,41 @@ if (isset($_GET['link'])) {
         <button class="btn-lg btn-primary" style="width1: 95vw;" type="submit" name="create"><?php echo($lang_main5);?></button>
         <input type="hidden" name="csrfToken" value="<?php echo($token);?>">
       </form>
-    </div>    
+    </div>
+    <section class="mt-4 mb-4 p-4 border rounded-3 bg-light" aria-labelledby="message-history-heading">
+      <h2 id="message-history-heading" class="h4 mb-3"><?php echo($lang_history);?></h2>
+      <?php
+      $historyQuery=$mysqli_dbh->query("SELECT `sent_at`,`viewed` FROM `message_history` ORDER BY `sent_at` DESC, `id` DESC", PDO::FETCH_ASSOC);
+      $historyRows=$historyQuery->fetchAll(PDO::FETCH_ASSOC);
+      if (empty($historyRows)) { ?>
+        <p class="mb-0"><?php echo($lang_history_empty);?></p>
+      <?php } else { ?>
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead>
+              <tr>
+                <th scope="col"><?php echo($lang_history_sent);?></th>
+                <th scope="col"><?php echo($lang_history_status);?></th>
+              </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($historyRows as $historyRow) { ?>
+              <tr>
+                <td><time datetime="<?php echo(htmlspecialchars($historyRow['sent_at'], ENT_QUOTES, 'UTF-8'));?>"><?php echo(htmlspecialchars($historyRow['sent_at'], ENT_QUOTES, 'UTF-8'));?></time></td>
+                <td>
+                  <?php if ((int)$historyRow['viewed'] === 1) { ?>
+                    <span class="badge bg-success"><?php echo($lang_history_viewed);?></span>
+                  <?php } else { ?>
+                    <span class="badge bg-secondary"><?php echo($lang_history_unviewed);?></span>
+                  <?php } ?>
+                </td>
+              </tr>
+            <?php } ?>
+            </tbody>
+          </table>
+        </div>
+      <?php } ?>
+    </section>
   </div>
 </body>
 </html>

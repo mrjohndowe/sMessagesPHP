@@ -32,6 +32,12 @@ function setLang($locale) {
   global $lang_theme_dark;
   global $lang_theme_light;
   global $lang_main11;
+  global $lang_history;
+  global $lang_history_sent;
+  global $lang_history_status;
+  global $lang_history_viewed;
+  global $lang_history_unviewed;
+  global $lang_history_empty;
   switch ($locale) {
     case 1:
       $lang_meta="uk";
@@ -65,6 +71,12 @@ function setLang($locale) {
       $lang_theme_dark="Темна тема";
       $lang_theme_light="Світла тема";
       $lang_main11="Кількість переглядів";
+      $lang_history="Історія повідомлень";
+      $lang_history_sent="Надіслано";
+      $lang_history_status="Статус";
+      $lang_history_viewed="Переглянуто";
+      $lang_history_unviewed="Не переглянуто";
+      $lang_history_empty="Повідомлень ще немає.";
       break;
     case 2:
       $lang_meta="ru";
@@ -98,6 +110,12 @@ function setLang($locale) {
       $lang_theme_dark="Тёмная тема";
       $lang_theme_light="Светлая тема";
       $lang_main11="Количество просмотров";
+      $lang_history="История сообщений";
+      $lang_history_sent="Отправлено";
+      $lang_history_status="Статус";
+      $lang_history_viewed="Просмотрено";
+      $lang_history_unviewed="Не просмотрено";
+      $lang_history_empty="Сообщений пока нет.";
       break;
     case 3:
       $lang_meta="en";
@@ -131,6 +149,12 @@ function setLang($locale) {
       $lang_theme_dark="Dark mode";
       $lang_theme_light="Light mode";
       $lang_main11="Number of views";
+      $lang_history="Message history";
+      $lang_history_sent="Sent";
+      $lang_history_status="Status";
+      $lang_history_viewed="Viewed";
+      $lang_history_unviewed="Not viewed";
+      $lang_history_empty="No messages have been sent yet.";
       break;
   }
 }
