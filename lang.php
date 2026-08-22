@@ -29,6 +29,8 @@ function setLang($locale) {
   global $lang_conf;
   global $lang_open;
   global $lang_text;
+  global $lang_theme_dark;
+  global $lang_theme_light;
   switch ($locale) {
     case 1:
       $lang_meta="uk";
@@ -59,6 +61,8 @@ function setLang($locale) {
       $lang_conf="Пiдтвердiть вiдкриття посилання.<br>Пiсля цього воно буде показано один раз и видалено:";
       $lang_open="Вiдкрити посилання";
       $lang_text="Ось текст що був зашифрован:";
+      $lang_theme_dark="Темна тема";
+      $lang_theme_light="Світла тема";
       break;
     case 2:
       $lang_meta="ru";
@@ -89,6 +93,8 @@ function setLang($locale) {
       $lang_conf="Подтвердите открытие ссылки.<br>После этого оно будет показано один раз и удалено:";
       $lang_open="Открыть ссылку";
       $lang_text="Вот текст что был зашифрован:";
+      $lang_theme_dark="Тёмная тема";
+      $lang_theme_light="Светлая тема";
       break;
     case 3:
       $lang_meta="en";
@@ -119,6 +125,8 @@ function setLang($locale) {
       $lang_conf="Confirm link opening.<br>After that you will see the stored message once and it will be deleted.";
       $lang_open="Open link";
       $lang_text="Here is your data that was encrypted:";
+      $lang_theme_dark="Dark mode";
+      $lang_theme_light="Light mode";
       break;
   }
 }

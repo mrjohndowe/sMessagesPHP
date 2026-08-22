@@ -94,9 +94,119 @@ if (!isset($_POST['dwlAttachment'])) {?>
     <meta name="description" content="<?php echo($lang_descr);?>">
     <link rel="icon" type="image/png" href="favicon.png" />
     <title><?php echo($lang_title);?></title>
+    <script>
+      (function () {
+        const savedTheme = localStorage.getItem('sm-theme');
+        const dark = savedTheme === 'dark' ||
+          (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      }());
+    </script>
     <link href="css/bootstrap.min.css" rel="stylesheet">
+    <style>
+      :root { color-scheme: light; }
+      :root[data-theme="dark"] { color-scheme: dark; }
+      body {
+        background: #f8f9fa;
+        color: #212529;
+        transition: background-color .2s ease, color .2s ease;
+      }
+      :root[data-theme="dark"] body { background: #121212; color: #f1f3f5; }
+      :root[data-theme="dark"] .bg-light,
+      :root[data-theme="dark"] .form-control,
+      :root[data-theme="dark"] form.bg-light {
+        background-color: #1f2327 !important;
+        color: #f1f3f5 !important;
+        border-color: #495057 !important;
+      }
+      :root[data-theme="dark"] .form-control:focus {
+        background-color: #252a2f !important;
+        color: #fff !important;
+      }
+      :root[data-theme="dark"] .form-floating > label { color: #adb5bd; }
+      :root[data-theme="dark"] a { color: #8bb9fe; }
+      :root[data-theme="dark"] hr { border-color: #495057; }
+      .theme-toggle {
+        position: fixed;
+        z-index: 1000;
+        top: .75rem;
+        right: .75rem;
+      }
+      .protected-message {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+      }
+      #privacy-shield {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: none;
+        background: #000;
+      }
+      body.privacy-hidden #privacy-shield { display: block; }
+      @media print {
+        body.protected-view * { visibility: hidden !important; }
+        body.protected-view,
+        body.protected-view::before {
+          background: #000 !important;
+        }
+        body.protected-view::before {
+          content: "";
+          position: fixed;
+          inset: 0;
+          visibility: visible !important;
+        }
+      }
+    </style>
   </head>
 <body>
+<button id="theme-toggle" class="btn btn-sm btn-outline-secondary theme-toggle" type="button" aria-pressed="false"></button>
+<div id="privacy-shield" aria-hidden="true"></div>
+<script>
+  (function () {
+    const root = document.documentElement;
+    const toggle = document.getElementById('theme-toggle');
+    const labels = { dark: <?php echo json_encode($lang_theme_dark); ?>, light: <?php echo json_encode($lang_theme_light); ?> };
+
+    function renderThemeToggle() {
+      const dark = root.dataset.theme === 'dark';
+      toggle.textContent = dark ? labels.light : labels.dark;
+      toggle.setAttribute('aria-pressed', String(dark));
+    }
+
+    toggle.addEventListener('click', function () {
+      const theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      root.dataset.theme = theme;
+      localStorage.setItem('sm-theme', theme);
+      renderThemeToggle();
+    });
+    renderThemeToggle();
+
+    document.addEventListener('DOMContentLoaded', function () {
+      const message = document.querySelector('.protected-message');
+      if (!message) return;
+
+      document.body.classList.add('protected-view');
+      ['copy', 'cut', 'contextmenu', 'dragstart', 'selectstart'].forEach(function (eventName) {
+        message.addEventListener(eventName, function (event) { event.preventDefault(); });
+      });
+      document.addEventListener('keydown', function (event) {
+        if ((event.ctrlKey || event.metaKey) && ['a', 'c', 'x', 'p', 's', 'u'].includes(event.key.toLowerCase())) {
+          event.preventDefault();
+        }
+      });
+      document.addEventListener('visibilitychange', function () {
+        document.body.classList.toggle('privacy-hidden', document.hidden);
+      });
+      window.addEventListener('pagehide', function () {
+        document.body.classList.add('privacy-hidden');
+      });
+    });
+  }());
+</script>
 <?php }
 //Create link and secure data function
 if (isset($_POST['create'])) {
@@ -229,7 +339,7 @@ if (isset($_GET['link'])) {
     <div class="bg-light p-5 rounded">
       <div class="col-sm-8 mx-auto">
         <h1><?php echo($lang_text); ?></h1>  
-         <h3><pre><?php
+         <h3><pre class="protected-message" aria-label="<?php echo htmlspecialchars($lang_text, ENT_QUOTES, 'UTF-8'); ?>"><?php
         //if 'message' field in DB is not empty
         if (!empty($encrypted_text)) {
           //if 'encrypted_text' is not equal to "-" which means the text message wasn't added while creation of message
@@ -274,7 +384,7 @@ if (isset($_GET['link'])) {
     <div class="bg-light p-5 rounded">
       <div class="col-sm-8 mx-auto">
         <h1><?php echo($lang_text);?></h1>  
-         <h3><pre><?php 
+         <h3><pre class="protected-message" aria-label="<?php echo htmlspecialchars($lang_text, ENT_QUOTES, 'UTF-8'); ?>"><?php
          if (empty($_POST['pskOpInput']))
          {
           echo("<script>alert('".$lang_err8."');</script>");
