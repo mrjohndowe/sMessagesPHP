@@ -46,6 +46,11 @@ $ciphering="AES256";
 $iv_length=openssl_cipher_iv_length($ciphering);
 $options=0;
 
+//Generate the CSRF token and cookie before any HTML is sent.
+$salt=rand(0,9).rand(0,9).rand(0,9).rand(0,9).rand(0,9).rand(0,9);
+$token=$salt.":".MD5($salt.":".$key);
+setcookie("CSRF", $token, time() + 600, "/");
+
 //daily function to clean all expired data in DB
 if (isset($_GET['clean'])) {
   global $mysqli_dbh;
@@ -443,10 +448,6 @@ if (isset($_GET['link'])) {
     die();
   }
 }
-//generating salt and cookie for every new page
-$salt=rand(0,9).rand(0,9).rand(0,9).rand(0,9).rand(0,9).rand(0,9);
-$token=$salt.":".MD5($salt.":".$key);
-setcookie("CSRF", $token, time() + 600, "/");
 ?>
   <div id="global-block" style="width: 99vw; height: 99vh; padding-left: 1rem; float: center; postion: relative;">
     <div id="top-block" style="margin-top: 10px; text-align: center; postion: absolute; padding-right: 1rem;">

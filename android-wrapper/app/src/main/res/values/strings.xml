@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Secure Messages</string>
+    <string name="server_error">The secure message server is unavailable.</string>
+    <string name="no_file_picker">No file picker is available on this device.</string>
+    <string name="no_browser">No browser is available to open this link.</string>
+</resources>

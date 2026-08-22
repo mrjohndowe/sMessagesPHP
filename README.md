@@ -20,3 +20,10 @@ This small simple PHP script allows you to secure share any text data via any me
 * Created links has an exparition timeout.After the exparation you woudn't be able to open this messages using their links.When you try - the message will be selfdestroyed and you will be notified about.
 * You can set CRON to launch autoclean function from the script, which will find and clean all expired messages. The function can be called by adding GET request "?clean" to your address.
 * There are two tables in DB - one for temporarily store messages, second for logging. You can check logging table to see when your message was opened and by which IP.
+
+## Android wrapper
+
+An optional native Android WebView application is available in
+`android-wrapper`. It uses Android secure-window protection to block
+screenshots, screen recording, recent-app previews, and non-secure displays.
+See `android-wrapper/README.md` for URL configuration and build instructions.
